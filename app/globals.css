@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-base: 244 247 245;
+  --color-panel: 255 255 255;
+  --color-panel-2: 247 250 248;
+  --color-ink: 18 32 26;
+  --color-muted: 91 107 98;
+  --color-line: 226 232 228;
+
+  --color-brand: 0 159 102;      /* #009f66 */
+  --color-brand-dark: 0 128 84;  /* #008054 */
+  --color-brand-700: 4 90 61;
+  --color-brand-400: 45 189 141;
+  --color-brand-100: 205 238 223;
+  --color-brand-50: 231 247 240;
+
+  --color-amarelo: 169 113 27;
+  --color-amarelo-bg: 251 240 221;
+  --color-vermelho: 178 59 46;
+  --color-vermelho-bg: 251 233 229;
+
+  /* paleta de apoio: usada por significado (azul = informativo / a vencer,
+     roxo = crédito / limite), nunca como enfeite */
+  --color-azul: 37 99 175;
+  --color-azul-bg: 226 237 251;
+  --color-roxo: 109 69 189;
+  --color-roxo-bg: 240 233 252;
+
+  color-scheme: light;
+}
+
+.dark {
+  /* preto acinzentado (neutro, sem tom de verde) */
+  --color-base: 15 16 18;
+  --color-panel: 24 25 28;
+  --color-panel-2: 31 32 36;
+  --color-ink: 236 238 240;
+  --color-muted: 148 152 158;
+  --color-line: 42 44 49;
+
+  --color-brand: 0 193 127;      /* #00c17f */
+  --color-brand-dark: 33 209 148;
+  --color-brand-700: 134 232 191;
+  --color-brand-400: 0 165 108;
+  --color-brand-100: 20 58 44;
+  --color-brand-50: 19 36 30;
+
+  --color-amarelo: 240 181 82;
+  --color-amarelo-bg: 43 35 20;
+  --color-vermelho: 255 128 114;
+  --color-vermelho-bg: 46 25 23;
+
+  --color-azul: 117 171 244;
+  --color-azul-bg: 20 32 52;
+  --color-roxo: 176 146 245;
+  --color-roxo-bg: 35 27 54;
+
+  color-scheme: dark;
+}
+
+* {
+  border-color: rgb(var(--color-line));
+}
+
+html {
+  background: rgb(var(--color-base));
+}
+
+body {
+  color: rgb(var(--color-ink));
+  background: rgb(var(--color-base));
+  background-image:
+    radial-gradient(circle at 0% 0%, rgb(var(--color-brand) / 0.07), transparent 32%),
+    radial-gradient(circle at 100% 0%, rgb(var(--color-brand) / 0.05), transparent 28%);
+  background-attachment: fixed;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* transição suave ao trocar de tema, sem afetar hover/transform */
+html.theme-ready * {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 150ms;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-line));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--color-muted) / 0.5); }
+
+/* Contador de milissegundos do LoadingSpinner, feito só com CSS: funciona
+   mesmo enquanto o servidor ainda está respondendo (antes do React hidratar). */
+@property --ms {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes contar-ms {
+  from { --ms: 0; }
+  to { --ms: 600000; }
+}
+
+.contador-ms {
+  animation: contar-ms 600s linear forwards;
+  counter-reset: ms var(--ms);
+}
+
+.contador-ms::before {
+  content: counter(ms) "ms";
+}
+
+/* foco de teclado visível em links e botões */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgb(var(--color-brand) / 0.6);
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
