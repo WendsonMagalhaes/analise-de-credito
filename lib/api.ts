@@ -1,4 +1,6 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api-analise-de-credito.vercel.app";
+// URL da API: usa a variável NEXT_PUBLIC_API_URL se existir (.env.local ou Vercel);
+// senão, cai na API publicada na Vercel. A barra final, se houver, é removida.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export type Cliente = {
   cliente: string;
