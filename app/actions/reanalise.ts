@@ -1,15 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { API_URL } from "@/lib/api";
+import { apiServer } from "@/lib/server-api";
 
 export async function registrarGatilhoExternoAction(
   cliente: string,
   tipo: string,
   detalhes?: Record<string, unknown>
 ) {
-  const res = await fetch(
-    `${API_URL}/api/clientes/${encodeURIComponent(cliente)}/reanalise/gatilho-externo`,
+  const res = await apiServer(
+    `/api/clientes/${encodeURIComponent(cliente)}/reanalise/gatilho-externo`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,7 +21,7 @@ export async function registrarGatilhoExternoAction(
 }
 
 export async function resolverGatilhoReanaliseAction(gatilhoId: number) {
-  const res = await fetch(`${API_URL}/api/reanalise/${gatilhoId}/resolver`, { method: "POST" });
+  const res = await apiServer(`/api/reanalise/${gatilhoId}/resolver`, { method: "POST" });
   if (!res.ok) throw new Error("Falha ao marcar gatilho como resolvido.");
   revalidatePath("/creditos");
 }

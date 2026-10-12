@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { API_URL } from "@/lib/api";
+import { apiServer } from "@/lib/server-api";
 
 /**
  * Substitui, por enquanto, o job diário que ainda não tem agendador
@@ -12,7 +12,7 @@ import { API_URL } from "@/lib/api";
  * um recálculo pontual (ex.: logo depois de aprovar um reajuste).
  */
 export async function atualizarAnaliseCreditoAction() {
-  const res = await fetch(`${API_URL}/api/creditos/atualizar`, { method: "POST" });
+  const res = await apiServer(`/api/creditos/atualizar`, { method: "POST" });
   if (!res.ok) throw new Error("Falha ao atualizar a análise de crédito.");
   const resultado = await res.json();
   revalidatePath("/creditos");

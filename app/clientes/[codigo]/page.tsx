@@ -1,5 +1,6 @@
 "use client";
 
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +14,7 @@ import {
   registrarDecisao,
   fetchAnaliseIA,
   formatBRL,
+  apiFetch,
   type ComparativoCarteira,
   type Decisao,
   type PontoScore,
@@ -21,9 +23,11 @@ import {
   type ReajusteLimite,
 } from "@/lib/api";
 import WhatIfSimulador from "./what-if-simulador";
+import PeriodoFiltro from "@/components/ui/PeriodoFiltro";
+import { dentroDoPeriodo, type Periodo } from "@/lib/periodo";
 import { StatCard } from "@/components/ui/StatCard";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { Badge, FaixaBadge } from "@/components/ui/Badge";
+import { Badge, FaixaBadge } from "@/components/ui/FaixaBadge";
 import { TableShell, theadRowClass, thClass, tdClass, trClass, EmptyRow } from "@/components/ui/Table";
 import { ArrowLeft, ScrollText, Send, Loader2 } from "lucide-react";
 import { PaginaClienteDetalheSkeleton, SkeletonSecao, SkeletonTabela } from "@/components/ui/Skeleton";
@@ -135,9 +139,7 @@ function gerarVeredito(resumo: any, comparativo: ComparativoCarteira | null): st
   return partes.join(" ");
 }
 
-export default function ClienteDetalhe() {
-  const params = useParams();
-  const nome = decodeURIComponent(params.nome as string);
+function ClienteDetalhe({ nome }: { nome: string }) {
   const [data, setData] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [decisoes, setDecisoes] = useState<Decisao[]>([]);
@@ -149,6 +151,26 @@ export default function ClienteDetalhe() {
   // Enquanto não chegam, mostramos skeleton em vez de "nenhum registro".
   const [carregandoExtras, setCarregandoExtras] = useState(true);
   const [carregandoDecisoes, setCarregandoDecisoes] = useState(true);
+  // período dos destaques (mês atual / 6 meses / tudo); padrão: tudo
+  const [periodo, setPeriodo] = useState<Periodo>("tudo");
+  const [metricas, setMetricas] = useState<{
+    maior_compra: number | null;
+    maior_atraso_hoje: number | null;
+    historico: { qtd_pagos: number; total_pago: number; atraso_medio: number | null; pct_atraso: number | null };
+  } | null>(null);
+  const hist = metricas?.historico ?? null;
+
+  useEffect(() => {
+    let ativo = true;
+    setMetricas(null);
+    apiFetch(`/api/clientes/${encodeURIComponent(nome)}/metricas?periodo=${periodo}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => ativo && setMetricas(d))
+      .catch(() => ativo && setMetricas(null));
+    return () => {
+      ativo = false;
+    };
+  }, [nome, periodo]);
 
   useEffect(() => {
     let ativo = true; // navegar de um cliente para outro não deixa a resposta do anterior sobrescrever
@@ -264,118 +286,126 @@ export default function ClienteDetalhe() {
           {/* --- Análise da IA logo no topo, como apoio à leitura de tudo abaixo --- */}
           <AnaliseIA cliente={nome} />
 
-          {/* --- Limite e exposição --- */}
-          <p className="text-xs text-muted uppercase tracking-wide mb-2">Limite e exposição</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard
-              label="Limite cadastrado no ERP" accent="roxo"
-              value={resumo.limite_atual != null ? formatBRL(resumo.limite_atual) : "não importado"}
-              destaque
-            />
-            <StatCard
-              label="Limite consumido"
-              value={formatPct(limiteConsumidoPct)}
-              tone={limiteConsumidoPct == null ? "neutro" : limiteConsumidoPct >= 100 ? "vermelho" : limiteConsumidoPct >= 80 ? undefined : "verde"}
-              hint={resumo.limite_atual != null ? `${formatBRL(resumo.valor_em_aberto)} em aberto` : undefined}
-              destaque
-            />
-            <StatCard
-              label="Margem livre hoje"
-              value={resumo.margem_limite_atual != null ? formatBRL(resumo.margem_limite_atual) : "—"}
-              tone={resumo.margem_limite_atual == null ? "neutro" : resumo.margem_limite_atual >= 0 ? "verde" : "vermelho"}
-              destaque
-            />
-            <StatCard
-              label="Recomendação de limite"
-              value={RECOMENDACAO_LABEL[resumo.recomendacao_limite] || "—"}
-              tone={RECOMENDACAO_COR[resumo.recomendacao_limite]}
-              destaque
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-8">
-            <StatCard
-              label="Limite sugerido pelo score" accent="roxo"
-              value={resumo.limite_sugerido != null ? formatBRL(resumo.limite_sugerido) : "sem dados suficientes"}
-            />
-            <StatCard
-              label="Margem s/ limite sugerido"
-              value={resumo.margem_disponivel != null ? formatBRL(resumo.margem_disponivel) : "—"}
-              tone={resumo.margem_disponivel == null ? "neutro" : resumo.margem_disponivel >= 0 ? "verde" : "vermelho"}
-            />
+          {/* --- Indicadores: painéis com cartões e cor por significado --- */}
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+            <p className="text-xs text-muted uppercase tracking-wide">Indicadores</p>
+            <PeriodoFiltro valor={periodo} onChange={setPeriodo} />
           </div>
 
-          {/* --- Boletos --- */}
-          <p className="text-xs text-muted uppercase tracking-wide mb-2">Boletos</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
-            <StatCard label="Em aberto hoje" accent="azul" value={formatBRL(resumo.valor_em_aberto)} />
-            <StatCard label="Qtd. títulos em aberto" accent="azul" value={String(resumo.qtd_titulos_aberto)} />
-            <StatCard
-              label="Total vencido"
-              value={formatBRL(boletos.totalVencido)}
-              tone={boletos.totalVencido > 0 ? "vermelho" : "verde"}
-              hint={`${boletos.qtdVencidos} título(s)`}
-            />
-            <StatCard
-              label="Maior atraso hoje"
-              value={resumo.dias_vencido_max > 0 ? formatDias(resumo.dias_vencido_max, 0) : "—"}
-              tone={resumo.dias_vencido_max > 0 ? "vermelho" : "verde"}
-            />
-            <StatCard
-              label="Próximo vencimento"
-              value={boletos.proximoVencimento ? new Date(boletos.proximoVencimento).toLocaleDateString("pt-BR") : "—"}
-              hint={boletos.proximoValor != null ? formatBRL(boletos.proximoValor) : undefined}
-            />
-          </div>
-
-          {/* --- Score e comportamento --- */}
-          <p className="text-xs text-muted uppercase tracking-wide mb-2">Score e comportamento</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-            <StatCard label="Atraso médio" accent="amarelo" value={formatDias(resumo.atraso_medio_dias)} />
-            <StatCard label="% pago em atraso" accent="amarelo" value={formatPct(resumo.pct_pago_em_atraso)} />
-            <StatCard label="Tendência" accent="azul" value={formatTendencia(resumo.tendencia)} />
-            <StatCard
-              label="Total já pago (histórico)" accent="verde"
-              value={formatBRL(resumo.valor_total_pago)}
-              hint={`${resumo.qtd_titulos_pagos} título(s) pagos`}
-            />
-          </div>
-
-          {(resumo.classe_risco_5 || resumo.recomendacao_acao) && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 text-sm">
-              <div className="border border-line border-l-4 border-l-azul rounded-2xl bg-panel px-4 py-3 shadow-soft">
-                <p className="text-xs text-muted uppercase tracking-wide mb-2">
-                  Classificação de risco (comportamento x exposição)
-                </p>
-                {resumo.classe_risco_5 ? (
-                  <span
-                    className={`inline-flex items-center justify-center rounded px-3 py-1 text-sm font-semibold ${CLASSE_STYLE[resumo.classe_risco_5] || "bg-base text-ink"
-                      }`}
-                  >
-                    Classe {resumo.classe_risco_5}
-                  </span>
-                ) : (
-                  <span className="text-ink">—</span>
-                )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+            <Painel titulo="Situação" accent="azul">
+              <div className="grid grid-cols-2 gap-3">
+                <Tile
+                  rotulo="Score"
+                  valor={resumo.score != null ? formatNumero(resumo.score, 0) : "—"}
+                  sub={resumo.faixa ? `Faixa ${FAIXA_NOME[resumo.faixa] ?? resumo.faixa}` : undefined}
+                  tom={tomFaixa(resumo.faixa)}
+                />
+                <Tile rotulo="Classe" valor={resumo.classe_risco_5 ?? "—"} tom="roxo" />
+                <Tile
+                  rotulo="Comportamento"
+                  valor={resumo.score_comportamento != null ? formatNumero(resumo.score_comportamento, 1) : "—"}
+                  sub={resumo.score_exposicao != null ? `exposição ${formatNumero(resumo.score_exposicao, 1)}` : undefined}
+                />
+                <Tile rotulo="Tendência" valor={formatTendencia(resumo.tendencia)} tom={tomTendencia(resumo.tendencia)} />
               </div>
-              <StatCard
-                label="Score comportamento / exposição" accent="roxo"
-                value={
-                  resumo.score_comportamento != null && resumo.score_exposicao != null
-                    ? `${formatNumero(resumo.score_comportamento, 1)} / ${formatNumero(resumo.score_exposicao, 1)}`
-                    : "—"
-                }
+              <Destaque
+                rotulo="Recomendação"
+                valor={RECOMENDACAO_ACAO_LABEL[resumo.recomendacao_acao] || "—"}
+                texto={resumo.regra_recomendacao ? primeiraMaiuscula(resumo.regra_recomendacao) : undefined}
+                tom={tomRecomendacao(resumo.recomendacao_acao)}
               />
-              <StatCard
-                label="Recomendação do motor de decisão"
-                value={RECOMENDACAO_ACAO_LABEL[resumo.recomendacao_acao] || "—"}
-                tone={resumo.recomendacao_acao === "aprovar" ? "verde" : resumo.recomendacao_acao === "negar" ? "vermelho" : undefined}
-                destaque
-              />
-              {resumo.regra_recomendacao && (
-                <p className="md:col-span-3 text-xs text-muted -mt-1">{primeiraMaiuscula(resumo.regra_recomendacao)}</p>
-              )}
-            </div>
-          )}
+            </Painel>
+
+            <Painel titulo="Limite" accent="roxo">
+              <div className="grid grid-cols-2 gap-3">
+                <Tile
+                  rotulo="Cadastrado no ERP"
+                  valor={resumo.limite_atual != null ? formatBRL(resumo.limite_atual) : "não importado"}
+                />
+                <Tile
+                  rotulo="Sugerido pelo score"
+                  valor={resumo.limite_sugerido != null ? formatBRL(resumo.limite_sugerido) : "sem dados"}
+                />
+                <Tile
+                  rotulo="Consumido"
+                  valor={formatPct(limiteConsumidoPct)}
+                  sub={resumo.limite_atual != null ? `${formatBRL(resumo.valor_em_aberto)} em aberto` : undefined}
+                  tom={limiteConsumidoPct == null ? undefined : limiteConsumidoPct >= 100 ? "vermelho" : limiteConsumidoPct >= 80 ? "amarelo" : "verde"}
+                  barra={limiteConsumidoPct ?? 0}
+                />
+                <Tile
+                  rotulo="Margem livre hoje"
+                  valor={resumo.margem_limite_atual != null ? formatBRL(resumo.margem_limite_atual) : "—"}
+                  sub="cadastrado − em aberto"
+                  tom={tomMargem(resumo.margem_limite_atual)}
+                />
+                <div className="col-span-2">
+                  <Tile
+                    rotulo="Margem s/ limite sugerido"
+                    valor={resumo.margem_disponivel != null ? formatBRL(resumo.margem_disponivel) : "—"}
+                    sub="sugerido − em aberto"
+                    tom={tomMargem(resumo.margem_disponivel)}
+                  />
+                </div>
+              </div>
+            </Painel>
+
+            <Painel titulo="Carteira hoje" accent="amarelo">
+              <div className="grid grid-cols-2 gap-3">
+                <Tile rotulo="Em aberto" valor={formatBRL(resumo.valor_em_aberto)} sub={`${resumo.qtd_titulos_aberto} título(s)`} />
+                <Tile
+                  rotulo="Vencido"
+                  valor={formatBRL(boletos.totalVencido)}
+                  sub={`${boletos.qtdVencidos} título(s)`}
+                  tom={boletos.totalVencido > 0 ? "vermelho" : undefined}
+                />
+                <Tile
+                  rotulo="Maior atraso"
+                  valor={
+                    metricas?.maior_atraso_hoje == null
+                      ? "—"
+                      : metricas.maior_atraso_hoje > 0
+                        ? formatDias(metricas.maior_atraso_hoje, 0)
+                        : "Em dia"
+                  }
+                  sub={PERIODO_TEXTO[periodo]}
+                  tom={metricas?.maior_atraso_hoje && metricas.maior_atraso_hoje > 0 ? "vermelho" : undefined}
+                />
+                <Tile
+                  rotulo="Próximo vencimento"
+                  valor={boletos.proximoVencimento ? new Date(boletos.proximoVencimento).toLocaleDateString("pt-BR") : "—"}
+                  sub={boletos.proximoValor != null ? formatBRL(boletos.proximoValor) : undefined}
+                />
+              </div>
+            </Painel>
+
+            <Painel titulo="Histórico" accent="verde">
+              <div className="grid grid-cols-2 gap-3">
+                <Tile
+                  rotulo="Atraso médio"
+                  valor={hist?.atraso_medio != null ? formatDias(hist.atraso_medio, 1) : "—"}
+                  sub={PERIODO_TEXTO[periodo]}
+                />
+                <Tile
+                  rotulo="% pago em atraso"
+                  valor={hist?.pct_atraso != null ? formatPct(hist.pct_atraso) : "—"}
+                  tom={hist?.pct_atraso == null ? undefined : hist.pct_atraso >= 50 ? "vermelho" : hist.pct_atraso >= 20 ? "amarelo" : "verde"}
+                  sub={PERIODO_TEXTO[periodo]}
+                />
+                <Tile
+                  rotulo="Total já pago"
+                  valor={hist ? formatBRL(hist.total_pago) : "—"}
+                  sub={hist ? `${hist.qtd_pagos} título(s) pagos · ${PERIODO_TEXTO[periodo]}` : undefined}
+                />
+                <Tile
+                  rotulo="Maior compra"
+                  valor={metricas?.maior_compra != null ? formatBRL(metricas.maior_compra) : "—"}
+                  sub={PERIODO_TEXTO[periodo]}
+                />
+              </div>
+            </Painel>
+          </div>
 
           {resumo.motivos?.length > 0 && (
             <SectionCard tone="roxo" title="Por que esse score?" className="mb-4">
@@ -412,7 +442,7 @@ export default function ClienteDetalhe() {
             </SectionCard>
           )}
 
-          {carregandoExtras ? <SkeletonSecao linhas={3} className="mb-4" /> : <GraficoScore pontos={historicoScore} />}
+          {carregandoExtras ? <SkeletonSecao linhas={3} className="mb-4" /> : <GraficoScore pontos={historicoScore.filter((p) => dentroDoPeriodo(p.data_captura, periodo))} />}
 
           {/* --- Aumento de limite --- */}
           {carregandoExtras ? (
@@ -518,7 +548,115 @@ export default function ClienteDetalhe() {
         <p className="text-sm text-muted">Sem pagamentos registrados ainda.</p>
       )}
 
-      <DecisaoCredito cliente={nome} resumo={resumo} decisoes={decisoes} carregandoHistorico={carregandoDecisoes} onRegistrada={carregarDecisoes} />
+      <DecisaoCredito cliente={nome} resumo={resumo} decisoes={decisoes.filter((d) => dentroDoPeriodo(d.criado_em, periodo))} carregandoHistorico={carregandoDecisoes} onRegistrada={carregarDecisoes} />
+    </div>
+  );
+}
+
+const FAIXA_NOME: Record<string, string> = { verde: "verde", amarelo: "amarela", vermelho: "vermelha" };
+const PERIODO_TEXTO: Record<Periodo, string> = {
+  mes: "emitidos no mês atual",
+  "6m": "emitidos nos últimos 6 meses",
+  tudo: "todo o histórico",
+};
+
+type Tom = "verde" | "amarelo" | "vermelho" | "roxo" | "azul";
+
+/** Cores do tema, direto pelas variáveis CSS (não dependem de classes do Tailwind). */
+const TOM: Record<Tom, { texto: string; fundo: string }> = {
+  verde: { texto: "rgb(var(--color-brand))", fundo: "rgb(var(--color-brand-50))" },
+  amarelo: { texto: "rgb(var(--color-amarelo))", fundo: "rgb(var(--color-amarelo-bg))" },
+  vermelho: { texto: "rgb(var(--color-vermelho))", fundo: "rgb(var(--color-vermelho-bg))" },
+  roxo: { texto: "rgb(var(--color-roxo))", fundo: "rgb(var(--color-roxo-bg))" },
+  azul: { texto: "rgb(var(--color-azul))", fundo: "rgb(var(--color-azul-bg))" },
+};
+
+function tomFaixa(f?: string): Tom | undefined {
+  return f === "vermelho" ? "vermelho" : f === "amarelo" ? "amarelo" : f === "verde" ? "verde" : undefined;
+}
+function tomRecomendacao(a?: string): Tom {
+  return a === "aprovar" ? "verde" : a === "negar" ? "vermelho" : "amarelo";
+}
+function tomMargem(v?: number | null): Tom | undefined {
+  if (v == null) return undefined;
+  return v >= 0 ? "verde" : "vermelho";
+}
+function tomTendencia(t?: string): Tom | undefined {
+  const texto = formatTendencia(t).toLowerCase();
+  if (texto.includes("piorando")) return "vermelho";
+  if (texto.includes("melhorando")) return "verde";
+  return undefined;
+}
+
+/** Painel: título na cor do assunto e uma faixa colorida na borda esquerda. */
+function Painel({ titulo, accent, children }: { titulo: string; accent: Tom; children: React.ReactNode }) {
+  const cor = TOM[accent];
+  return (
+    <section
+      className="rounded-2xl border border-line bg-panel shadow-soft p-5 flex flex-col gap-4"
+      style={{ borderLeftWidth: 4, borderLeftColor: cor.texto }}
+    >
+      <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: cor.texto }}>
+        {titulo}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Cartão de um indicador: rótulo pequeno, número grande, cor só quando há alerta. */
+function Tile({
+  rotulo,
+  valor,
+  sub,
+  tom,
+  barra,
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  sub?: string;
+  tom?: Tom;
+  barra?: number;
+}) {
+  const cor = tom ? TOM[tom] : undefined;
+  return (
+    <div
+      className="rounded-xl border p-3 min-w-0 flex flex-col gap-1"
+      style={{
+        background: cor ? cor.fundo : "rgb(var(--color-panel-2))",
+        borderColor: cor ? cor.texto : "rgb(var(--color-line))",
+      }}
+    >
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted">{rotulo}</span>
+      <span
+        className="text-lg sm:text-xl font-bold tabular"
+        style={{ color: cor ? cor.texto : "rgb(var(--color-ink))" }}
+      >
+        {valor}
+      </span>
+      {barra !== undefined && (
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(var(--color-line))" }}>
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.min(Math.max(barra, 0), 100)}%`, background: cor ? cor.texto : "rgb(var(--color-brand))" }}
+          />
+        </div>
+      )}
+      {sub && <span className="text-xs text-muted">{sub}</span>}
+    </div>
+  );
+}
+
+/** Destaque de largura total (ex.: recomendação), com cor de fundo do tom. */
+function Destaque({ rotulo, valor, texto, tom }: { rotulo: string; valor: React.ReactNode; texto?: string; tom: Tom }) {
+  const cor = TOM[tom];
+  return (
+    <div className="rounded-xl border p-4" style={{ background: cor.fundo, borderColor: cor.texto }}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{rotulo}</p>
+      <p className="text-2xl font-bold mt-1" style={{ color: cor.texto }}>
+        {valor}
+      </p>
+      {texto && <p className="text-sm text-ink mt-1">{texto}</p>}
     </div>
   );
 }
@@ -873,4 +1011,36 @@ function DecisaoCredito({
       )}
     </div>
   );
+}
+
+/** Recebe o código da URL, descobre o cliente no backend e só então carrega a tela. */
+export default function ClienteRota() {
+  const params = useParams();
+  const codigo = String(params.codigo ?? "");
+  const [nome, setNome] = useState<string | null>(null);
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+    apiFetch(`/api/clientes-por-codigo/${encodeURIComponent(codigo)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("não encontrado"))))
+      .then((d) => ativo && setNome(d.cliente))
+      .catch(() => ativo && setNaoEncontrado(true));
+    return () => {
+      ativo = false;
+    };
+  }, [codigo]);
+
+  if (naoEncontrado) {
+    return (
+      <div className="text-center py-24">
+        <p className="text-ink text-lg font-medium mb-2">Cliente não encontrado</p>
+        <Link href="/clientes" className="text-sm text-frost hover:text-frostdark">
+          Voltar para clientes
+        </Link>
+      </div>
+    );
+  }
+  if (!nome) return <LoadingSpinner rotulo="Carregando cliente…" />;
+  return <ClienteDetalhe nome={nome} />;
 }

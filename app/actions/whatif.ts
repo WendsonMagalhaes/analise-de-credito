@@ -1,6 +1,7 @@
 "use server";
 
-import { API_URL, type WhatIfResultado } from "@/lib/api";
+import type { WhatIfResultado } from "@/lib/api";
+import { apiServer } from "@/lib/server-api";
 
 /**
  * Não persiste nada (por isso não há revalidatePath aqui) — só repassa a
@@ -11,8 +12,8 @@ export async function simularWhatIfAction(
   cliente: string,
   valorPedido: number
 ): Promise<WhatIfResultado> {
-  const res = await fetch(
-    `${API_URL}/api/clientes/${encodeURIComponent(cliente)}/simulacao/what-if`,
+  const res = await apiServer(
+    `/api/clientes/${encodeURIComponent(cliente)}/simulacao/what-if`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

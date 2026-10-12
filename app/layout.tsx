@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+// Inter é baixada no build e servida pelo próprio site (sem depender do Google Fonts no navegador).
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
 import Sidebar from "@/components/layout/Sidebar";
+import { SidebarProvider } from "@/components/layout/SidebarContext";
+import ConteudoPrincipal from "@/components/layout/ConteudoPrincipal";
+import { usuarioLogado } from "@/lib/server-api";
 
 export const metadata: Metadata = {
   title: "Carteira | Análise de Crédito",
@@ -20,25 +32,18 @@ const THEME_INIT_SCRIPT = `
 })();
 `;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const usuario = await usuarioLogado();
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body suppressHydrationWarning className="font-sans bg-base text-ink min-h-screen antialiased">
-        <Sidebar />
-        <main className="lg:pl-64">
-          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-            {children}
-          </div>
-        </main>
+      <body suppressHydrationWarning className={`${inter.variable} font-sans bg-base text-ink min-h-screen antialiased`}>
+        <SidebarProvider>
+          <Sidebar papel={usuario?.papel ?? null} />
+          <ConteudoPrincipal>{children}</ConteudoPrincipal>
+        </SidebarProvider>
       </body>
     </html>
   );

@@ -2,13 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Tema próprio do projeto (usado pelas classes text-ink, text-muted, bg-base,
+   bg-panel, border-line, text-frost etc. do tailwind.config.ts)
+   ========================================================================== */
+
 :root {
   --color-base: 244 247 245;
   --color-panel: 255 255 255;
   --color-panel-2: 247 250 248;
-  --color-ink: 18 32 26;
-  --color-muted: 91 107 98;
-  --color-line: 226 232 228;
+  --color-ink: 8 16 12;          /* texto principal: bem escuro */
+  --color-muted: 58 72 64;       /* texto secundário: escuro, legível */
+  --color-line: 214 222 217;
 
   --color-brand: 0 159 102;      /* #009f66 */
   --color-brand-dark: 0 128 84;  /* #008054 */
@@ -17,16 +22,16 @@
   --color-brand-100: 205 238 223;
   --color-brand-50: 231 247 240;
 
-  --color-amarelo: 169 113 27;
+  --color-amarelo: 150 98 16;
   --color-amarelo-bg: 251 240 221;
-  --color-vermelho: 178 59 46;
+  --color-vermelho: 168 46 34;
   --color-vermelho-bg: 251 233 229;
 
   /* paleta de apoio: usada por significado (azul = informativo / a vencer,
      roxo = crédito / limite), nunca como enfeite */
-  --color-azul: 37 99 175;
+  --color-azul: 30 84 158;
   --color-azul-bg: 226 237 251;
-  --color-roxo: 109 69 189;
+  --color-roxo: 96 56 176;
   --color-roxo-bg: 240 233 252;
 
   color-scheme: light;
@@ -37,9 +42,9 @@
   --color-base: 15 16 18;
   --color-panel: 24 25 28;
   --color-panel-2: 31 32 36;
-  --color-ink: 236 238 240;
-  --color-muted: 148 152 158;
-  --color-line: 42 44 49;
+  --color-ink: 240 242 244;      /* texto principal: quase branco */
+  --color-muted: 170 176 184;    /* texto secundário: cinza claro, legível */
+  --color-line: 48 50 56;
 
   --color-brand: 0 193 127;      /* #00c17f */
   --color-brand-dark: 33 209 148;
@@ -61,6 +66,7 @@
   color-scheme: dark;
 }
 
+/* Base do projeto (sem @apply, para não depender de cores do tailwind.config) */
 * {
   border-color: rgb(var(--color-line));
 }
@@ -76,6 +82,17 @@ body {
     radial-gradient(circle at 0% 0%, rgb(var(--color-brand) / 0.07), transparent 32%),
     radial-gradient(circle at 100% 0%, rgb(var(--color-brand) / 0.05), transparent 28%);
   background-attachment: fixed;
+}
+
+/* Textos: definidos DEPOIS do @tailwind utilities, com a mesma especificidade,
+   para vencer a classe gerada pelo tailwind.config.ts (que o shadcn pode ter
+   alterado para apontar para as variáveis de fundo). */
+.text-ink {
+  color: rgb(var(--color-ink));
+}
+
+.text-muted {
+  color: rgb(var(--color-muted));
 }
 
 .tabular {
@@ -128,4 +145,65 @@ button:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ==========================================================================
+   Variáveis do shadcn/ui (usadas pelos componentes do shadcn e do cult-ui).
+   Ficam em @layer base e NÃO sobrescrevem as classes text-ink / text-muted.
+   ========================================================================== */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 220.9 39.3% 11%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 71.4% 4.1%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 220.9 39.3% 11%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 216 12.2% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
 }

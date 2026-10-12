@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { API_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   UploadCloud,
@@ -54,7 +54,7 @@ export default function UploadPage() {
     arquivos.forEach((f) => form.append("files", f));
 
     try {
-      const res = await fetch(`${API_URL}/api/upload`, { method: "POST", body: form });
+      const res = await apiFetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text());
       setResultado(await res.json());
     } catch (e: any) {

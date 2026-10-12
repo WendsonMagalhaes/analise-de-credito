@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { API_URL } from "@/lib/api";
+import { apiServer } from "@/lib/server-api";
 
 /**
  * Server Actions para reajuste de limite: a mutation roda no servidor
@@ -13,7 +13,7 @@ import { API_URL } from "@/lib/api";
  */
 
 export async function aprovarReajusteAction(reajusteId: number, aprovadoPor: string) {
-  const res = await fetch(`${API_URL}/api/reajustes-limite/${reajusteId}/aprovar`, {
+  const res = await apiServer(`/api/reajustes-limite/${reajusteId}/aprovar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ aprovado_por: aprovadoPor || null }),
@@ -27,7 +27,7 @@ export async function aprovarReajusteAction(reajusteId: number, aprovadoPor: str
 }
 
 export async function rejeitarReajusteAction(reajusteId: number, aprovadoPor: string) {
-  const res = await fetch(`${API_URL}/api/reajustes-limite/${reajusteId}/rejeitar`, {
+  const res = await apiServer(`/api/reajustes-limite/${reajusteId}/rejeitar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ aprovado_por: aprovadoPor || null }),

@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { API_URL } from "@/lib/api";
+import { apiServer } from "@/lib/server-api";
 
 export async function atualizarConfiguracaoAction(chave: string, valor: unknown) {
-  const res = await fetch(`${API_URL}/api/config/${encodeURIComponent(chave)}`, {
+  const res = await apiServer(`/api/config/${encodeURIComponent(chave)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ valor }),
@@ -14,7 +14,7 @@ export async function atualizarConfiguracaoAction(chave: string, valor: unknown)
 }
 
 export async function criarPeriodoSazonalAction(nome: string, dataInicio: string, dataFim: string) {
-  const res = await fetch(`${API_URL}/api/config/periodos-sazonais`, {
+  const res = await apiServer(`/api/config/periodos-sazonais`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nome, data_inicio: dataInicio, data_fim: dataFim }),
@@ -24,7 +24,7 @@ export async function criarPeriodoSazonalAction(nome: string, dataInicio: string
 }
 
 export async function removerPeriodoSazonalAction(periodoId: number) {
-  const res = await fetch(`${API_URL}/api/config/periodos-sazonais/${periodoId}`, {
+  const res = await apiServer(`/api/config/periodos-sazonais/${periodoId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Falha ao remover período sazonal.");

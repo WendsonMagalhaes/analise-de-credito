@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatBRL, type VisaoGeral } from "@/lib/api";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/FaixaBadge";
 import { TableShell, theadRowClass, thClass, tdClass, trClass, EmptyRow } from "@/components/ui/Table";
 import { AlertTriangle, Briefcase, Landmark } from "lucide-react";
 import { formatDias, formatPct, primeiraMaiuscula } from "@/lib/format";

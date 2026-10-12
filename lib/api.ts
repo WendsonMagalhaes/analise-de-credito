@@ -1,6 +1,27 @@
-// URL da API: usa a variável NEXT_PUBLIC_API_URL se existir (.env.local ou Vercel);
-// senão, cai na API publicada na Vercel. A barra final, se houver, é removida.
-export const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+/**
+ * Como o front fala com a API:
+ *  - No NAVEGADOR: chama o proxy do próprio site (/api/backend/...). O proxy confere o
+ *    cookie de sessão (HttpOnly, que o JavaScript não consegue ler) e repassa para a API
+ *    real. O endereço da API e o token nunca chegam ao navegador.
+ *  - No SERVIDOR (páginas server e Server Actions): fala direto com a API (variável
+ *    API_URL, sem NEXT_PUBLIC_) usando o token da sessão.
+ */
+export function apiFetch(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
+  if (typeof window !== "undefined") {
+    return fetch(`/api/backend${path}`, { ...init, credentials: "same-origin" }).then((res) => {
+      if (res.status === 401) {
+        // sessão expirou ou foi derrubada: volta para o login
+        window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      }
+      return res;
+    });
+  }
+  const base = (process.env.API_URL ?? "").replace(/\/$/, "");
+  if (!base) throw new Error("API_URL não está configurada no servidor.");
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${base}${path}`, { ...init, headers });
+}
 
 export type Cliente = {
   cliente: string;
@@ -213,9 +234,10 @@ export type PontoScore = {
   valor_em_aberto: number;
 };
 
-export const exportCarteiraUrl = `${API_URL}/api/carteira/export`;
+// Link de download: mesma origem, o cookie de sessão vai junto e o proxy repassa para a API.
+export const exportCarteiraUrl = "/api/backend/api/carteira/export";
 
-export async function fetchDashboard(params: DashboardParams = {}): Promise<DashboardResponse> {
+export async function fetchDashboard(params: DashboardParams = {}, token?: string): Promise<DashboardResponse> {
   const query = new URLSearchParams();
   query.set("pagina", String(params.pagina ?? 1));
   query.set("tamanho_pagina", String(params.tamanhoPagina ?? 25));
@@ -224,13 +246,13 @@ export async function fetchDashboard(params: DashboardParams = {}): Promise<Dash
   if (params.ordenarPor) query.set("ordenar_por", params.ordenarPor);
   if (params.ordenarDir) query.set("ordenar_dir", params.ordenarDir);
 
-  const res = await fetch(`${API_URL}/api/dashboard?${query.toString()}`, { cache: "no-store" });
+  const res = await apiFetch(`/api/dashboard?${query.toString()}`, { cache: "no-store" }, token);
   if (!res.ok) throw new Error("Falha ao buscar dashboard");
   return res.json();
 }
 
 export async function fetchCliente(nome: string) {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Cliente não encontrado");
@@ -238,7 +260,7 @@ export async function fetchCliente(nome: string) {
 }
 
 export async function fetchDecisoesCliente(nome: string): Promise<Decisao[]> {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}/decisoes`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}/decisoes`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Falha ao buscar histórico de decisões");
@@ -246,8 +268,8 @@ export async function fetchDecisoesCliente(nome: string): Promise<Decisao[]> {
 }
 
 export async function fetchHistoricoScore(nome: string): Promise<PontoScore[]> {
-  const res = await fetch(
-    `${API_URL}/api/clientes/${encodeURIComponent(nome)}/historico-score`,
+  const res = await apiFetch(
+    `/api/clientes/${encodeURIComponent(nome)}/historico-score`,
     { cache: "no-store" }
   );
   if (!res.ok) throw new Error("Falha ao buscar histórico de score");
@@ -255,7 +277,7 @@ export async function fetchHistoricoScore(nome: string): Promise<PontoScore[]> {
 }
 
 export async function registrarDecisao(nome: string, decisao: NovaDecisao): Promise<void> {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}/decisoes`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}/decisoes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(decisao),
@@ -263,26 +285,26 @@ export async function registrarDecisao(nome: string, decisao: NovaDecisao): Prom
   if (!res.ok) throw new Error("Falha ao registrar decisão");
 }
 
-export async function fetchDecisoesRecentes(limite = 8): Promise<Decisao[]> {
-  const res = await fetch(`${API_URL}/api/decisoes?limite=${limite}`, { cache: "no-store" });
+export async function fetchDecisoesRecentes(limite = 8, token?: string): Promise<Decisao[]> {
+  const res = await apiFetch(`/api/decisoes?limite=${limite}`, { cache: "no-store" }, token);
   if (!res.ok) throw new Error("Falha ao buscar decisões recentes");
   return res.json();
 }
 
-export async function fetchAlertas(): Promise<AlertasResponse> {
-  const res = await fetch(`${API_URL}/api/alertas`, { cache: "no-store" });
+export async function fetchAlertas(token?: string): Promise<AlertasResponse> {
+  const res = await apiFetch(`/api/alertas`, { cache: "no-store" }, token);
   if (!res.ok) throw new Error("Falha ao buscar alertas");
   return res.json();
 }
 
 export async function fetchClientesExcluidos(): Promise<ClienteExcluido[]> {
-  const res = await fetch(`${API_URL}/api/config/clientes-excluidos`, { cache: "no-store" });
+  const res = await apiFetch(`/api/config/clientes-excluidos`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar lista de exclusões");
   return res.json();
 }
 
 export async function adicionarClienteExcluido(cliente: string, motivo: string): Promise<void> {
-  const res = await fetch(`${API_URL}/api/config/clientes-excluidos`, {
+  const res = await apiFetch(`/api/config/clientes-excluidos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cliente, motivo: motivo || null }),
@@ -291,15 +313,15 @@ export async function adicionarClienteExcluido(cliente: string, motivo: string):
 }
 
 export async function removerClienteExcluido(cliente: string): Promise<void> {
-  const res = await fetch(
-    `${API_URL}/api/config/clientes-excluidos/${encodeURIComponent(cliente)}`,
+  const res = await apiFetch(
+    `/api/config/clientes-excluidos/${encodeURIComponent(cliente)}`,
     { method: "DELETE" }
   );
   if (!res.ok) throw new Error("Falha ao remover exclusão");
 }
 
 export async function fetchAnaliseIA(nome: string): Promise<{ analise: string; modelo: string }> {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}/analise-ia`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}/analise-ia`, {
     method: "POST",
   });
   if (!res.ok) {
@@ -311,7 +333,7 @@ export async function fetchAnaliseIA(nome: string): Promise<{ analise: string; m
 }
 
 export async function recalcularCarteira(): Promise<void> {
-  const res = await fetch(`${API_URL}/api/carteira/recalcular`, { method: "POST" });
+  const res = await apiFetch(`/api/carteira/recalcular`, { method: "POST" });
   if (!res.ok) throw new Error("Falha ao recalcular a carteira");
 }
 
@@ -319,14 +341,14 @@ export async function recalcularCarteira(): Promise<void> {
 // como Server Actions — ver ADR no início da pasta) ---
 
 export async function fetchReajustesPendentes(): Promise<ReajusteLimite[]> {
-  const res = await fetch(`${API_URL}/api/reajustes-limite`, { cache: "no-store" });
+  const res = await apiFetch(`/api/reajustes-limite`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar reajustes pendentes");
   return res.json();
 }
 
 export async function fetchReajustesLimiteCliente(nome: string): Promise<ReajusteLimite[]> {
-  const res = await fetch(
-    `${API_URL}/api/clientes/${encodeURIComponent(nome)}/reajustes-limite`,
+  const res = await apiFetch(
+    `/api/clientes/${encodeURIComponent(nome)}/reajustes-limite`,
     { cache: "no-store" }
   );
   if (!res.ok) throw new Error("Falha ao buscar histórico de reajustes de limite");
@@ -334,13 +356,13 @@ export async function fetchReajustesLimiteCliente(nome: string): Promise<Reajust
 }
 
 export async function fetchReanalisePendentes(): Promise<GatilhoReanalise[]> {
-  const res = await fetch(`${API_URL}/api/reanalise/pendentes`, { cache: "no-store" });
+  const res = await apiFetch(`/api/reanalise/pendentes`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar pendências de reanálise");
   return res.json();
 }
 
 export async function fetchToleranciaCliente(nome: string): Promise<EventoTolerancia[]> {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}/tolerancia`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}/tolerancia`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Falha ao buscar eventos de tolerância");
@@ -348,7 +370,7 @@ export async function fetchToleranciaCliente(nome: string): Promise<EventoTolera
 }
 
 export async function fetchAgingCliente(nome: string): Promise<TituloComAging[]> {
-  const res = await fetch(`${API_URL}/api/clientes/${encodeURIComponent(nome)}/aging`, {
+  const res = await apiFetch(`/api/clientes/${encodeURIComponent(nome)}/aging`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Falha ao buscar aging do cliente");
@@ -356,25 +378,25 @@ export async function fetchAgingCliente(nome: string): Promise<TituloComAging[]>
 }
 
 export async function fetchConcentracaoRisco(): Promise<ConcentracaoCliente[]> {
-  const res = await fetch(`${API_URL}/api/concentracao-risco`, { cache: "no-store" });
+  const res = await apiFetch(`/api/concentracao-risco`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar concentração de risco");
   return res.json();
 }
 
 export async function fetchProjecaoFluxoCaixa(): Promise<ProjecaoFluxoCaixa> {
-  const res = await fetch(`${API_URL}/api/fluxo-caixa/projecao`, { cache: "no-store" });
+  const res = await apiFetch(`/api/fluxo-caixa/projecao`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar projeção de fluxo de caixa");
   return res.json();
 }
 
 export async function fetchPeriodosSazonais(): Promise<PeriodoSazonal[]> {
-  const res = await fetch(`${API_URL}/api/config/periodos-sazonais`, { cache: "no-store" });
+  const res = await apiFetch(`/api/config/periodos-sazonais`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar períodos sazonais");
   return res.json();
 }
 
 export async function fetchConfiguracoes(): Promise<ConfiguracaoValor[]> {
-  const res = await fetch(`${API_URL}/api/config`, { cache: "no-store" });
+  const res = await apiFetch(`/api/config`, { cache: "no-store" });
   if (!res.ok) throw new Error("Falha ao buscar configurações");
   return res.json();
 }
@@ -387,8 +409,8 @@ export type PainelCredito = {
   reanalise_pendentes: GatilhoReanalise[];
 };
 
-export async function fetchPainelCredito(): Promise<PainelCredito> {
-  const res = await fetch(`${API_URL}/api/creditos/painel`, { cache: "no-store" });
+export async function fetchPainelCredito(token?: string): Promise<PainelCredito> {
+  const res = await apiFetch(`/api/creditos/painel`, { cache: "no-store" }, token);
   if (!res.ok) throw new Error("Falha ao buscar o painel de créditos");
   return res.json();
 }
@@ -441,8 +463,8 @@ export type VisaoGeral = {
   }[];
 };
 
-export async function fetchVisaoGeral(): Promise<VisaoGeral> {
-  const res = await fetch(`${API_URL}/api/dashboard/visao-geral`, { cache: "no-store" });
+export async function fetchVisaoGeral(token?: string): Promise<VisaoGeral> {
+  const res = await apiFetch(`/api/dashboard/visao-geral`, { cache: "no-store" }, token);
   if (!res.ok) throw new Error("Falha ao buscar a visão geral do dashboard");
   return res.json();
 }

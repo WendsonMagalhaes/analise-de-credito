@@ -1,6 +1,7 @@
+import { codigoCliente } from "@/lib/codigo-cliente";
 import Link from "next/link";
+import { tokenDaSessao } from "@/lib/server-api";
 import {
-  fetchDashboard,
   fetchDecisoesRecentes,
   fetchAlertas,
   fetchPainelCredito,
@@ -12,7 +13,7 @@ import {
 import { StatCard } from "@/components/ui/StatCard";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/FaixaBadge";
 import { PorCarteira, PorVendedor, VencidosPorFaixa } from "./visao-geral";
 import {
   Users,
@@ -28,8 +29,12 @@ import {
   Clock,
   PackageOpen,
   AlertTriangle,
+  TrendingUp,
 } from "lucide-react";
 import { capitalizar, formatNumero, formatPct } from "@/lib/format";
+import { fetchDashboardPeriodo } from "@/lib/api-periodo";
+import { lerPeriodo, type Periodo } from "@/lib/periodo";
+import PeriodoNav from "@/components/ui/PeriodoNav";
 
 // Sempre busca dados novos a cada request — nunca serve uma versão
 // pré-renderizada em build time (aqui a página depende 100% do backend).
@@ -60,15 +65,25 @@ const JANELAS: { chave: "ate_8_dias" | "9_a_14_dias" | "15_a_21_dias"; rotulo: s
 // concentração de risco, prazos de recebimento e o que precisa de ação
 // (reajustes/reanálise pendentes, alertas de piora). A lista de clientes
 // em si mora em /clientes, componentizada à parte.
-export default async function DashboardPage() {
+const PERIODO_ROTULO: Record<Periodo, string> = {
+  mes: "no mês atual",
+  "6m": "nos últimos 6 meses",
+  tudo: "em todo o histórico",
+};
+
+export default async function DashboardPage({ searchParams }: { searchParams: { periodo?: string } }) {
+  const token = tokenDaSessao();
+  const periodo = lerPeriodo(searchParams.periodo ?? null);
   const [dashboard, decisoesRecentes, alertas, painel, visao] = await Promise.all([
-    fetchDashboard({ pagina: 1, tamanhoPagina: 1 }),
-    fetchDecisoesRecentes(6).catch(() => []),
-    fetchAlertas().catch(() => ({ disponivel: false, alertas: [] as any[] })),
-    fetchPainelCredito().catch(() => null),
-    fetchVisaoGeral().catch(() => null),
+    fetchDashboardPeriodo({ pagina: 1, tamanhoPagina: 1, periodo }, token),
+    fetchDecisoesRecentes(6, token).catch(() => []),
+    fetchAlertas(token).catch(() => ({ disponivel: false, alertas: [] as any[] })),
+    fetchPainelCredito(token).catch(() => null),
+    fetchVisaoGeral(token).catch(() => null),
   ]);
 
+  // a API antiga (sem destaques) não derruba a página
+  const destaques = dashboard.destaques ?? { maior_compra: null, maior_atraso: null };
   const resumo = dashboard.resumo_geral;
 
   if (dashboard.total_clientes === 0) {
@@ -108,8 +123,9 @@ export default async function DashboardPage() {
         }
         actions={
           <>
+            <PeriodoNav />
             <Link
-              href="/clientes"
+              href={`/clientes?periodo=${periodo}`}
               className="flex items-center gap-1.5 text-sm font-medium text-ink hover:text-frost border border-line rounded-xl px-3 py-2 transition-colors"
             >
               Ver clientes <ArrowUpRight size={14} />
@@ -160,6 +176,32 @@ export default async function DashboardPage() {
         <StatCard label="Score médio" value={formatNumero(resumo.score_medio, 1)} icon={Gauge} accent="roxo" />
       </div>
 
+      {/* --- destaques do período escolhido no topo (mês atual / 6 meses / tudo) --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <StatCard
+          label="Maior compra"
+          accent="azul"
+          icon={TrendingUp}
+          value={destaques.maior_compra ? formatBRL(destaques.maior_compra.valor) : "—"}
+          hint={
+            destaques.maior_compra
+              ? `${destaques.maior_compra.cliente} · ${PERIODO_ROTULO[periodo]}`
+              : `sem títulos ${PERIODO_ROTULO[periodo]}`
+          }
+        />
+        <StatCard
+          label="Maior atraso hoje"
+          tone={destaques.maior_atraso ? "vermelho" : "neutro"}
+          icon={Clock}
+          value={destaques.maior_atraso ? `${destaques.maior_atraso.dias} dias` : "Em dia"}
+          hint={
+            destaques.maior_atraso
+              ? `${destaques.maior_atraso.cliente} · ${PERIODO_ROTULO[periodo]}`
+              : `nenhum título em atraso ${PERIODO_ROTULO[periodo]}`
+          }
+        />
+      </div>
+
       {/* --- vencidos por tempo de atraso + por carteira (coluna Conta do ERP) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <VencidosPorFaixa visao={visao} />
@@ -177,21 +219,21 @@ export default async function DashboardPage() {
             label="Verde"
             value={resumo.contagem_faixas.verde || 0}
             tone="verde"
-            href="/clientes?faixa=verde"
+            href={`/clientes?faixa=verde&periodo=${periodo}`}
             hint="clique para ver a lista"
           />
           <StatCard
             label="Amarelo"
             value={resumo.contagem_faixas.amarelo || 0}
             tone="amarelo"
-            href="/clientes?faixa=amarelo"
+            href={`/clientes?faixa=amarelo&periodo=${periodo}`}
             hint="clique para ver a lista"
           />
           <StatCard
             label="Vermelho"
             value={resumo.contagem_faixas.vermelho || 0}
             tone="vermelho"
-            href="/clientes?faixa=vermelho"
+            href={`/clientes?faixa=vermelho&periodo=${periodo}`}
             hint="clique para ver a lista"
           />
         </div>
@@ -242,7 +284,7 @@ export default async function DashboardPage() {
               {maioresExpostos.map((c: any) => (
                 <div key={c.cliente} className="flex items-center gap-3 text-sm">
                   <Link
-                    href={`/clientes/${encodeURIComponent(c.cliente)}`}
+                    href={`/clientes/${codigoCliente(c.cliente)}`}
                     className="text-ink font-medium hover:text-frost w-40 truncate shrink-0"
                     title={c.cliente}
                   >
@@ -291,7 +333,7 @@ export default async function DashboardPage() {
               {decisoesRecentes.map((d) => (
                 <div key={d.id} className="flex items-center justify-between text-sm gap-3">
                   <div className="truncate">
-                    <Link href={`/clientes/${encodeURIComponent(d.cliente)}`} className="text-ink font-medium hover:text-frost">
+                    <Link href={`/clientes/${codigoCliente(d.cliente)}`} className="text-ink font-medium hover:text-frost">
                       {d.cliente}
                     </Link>
                     <span className="text-muted ml-2 text-xs">

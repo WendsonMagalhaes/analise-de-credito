@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { tokenDaSessao } from "@/lib/server-api";
 import { fetchPainelCredito, formatBRL, formatDataBR } from "@/lib/api";
 import AtualizarAnaliseBotao from "./atualizar-analise-botao";
 import ReajusteAcoes from "./reajuste-acoes";
@@ -42,7 +43,7 @@ const ROTULOS_GATILHO: Record<string, string> = {
 // entre telas. O botão no topo é a ação direta pra puxar os números do
 // dia, já que ainda não existe um agendador rodando isso sozinho.
 export default async function CreditosPage() {
-  const painel = await fetchPainelCredito();
+  const painel = await fetchPainelCredito(tokenDaSessao());
   const acimaDoLimiar = painel.concentracao.filter((c) => c.acima_do_limiar);
 
   return (
